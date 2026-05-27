@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Racing Sandbox 3D</title>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+  <link rel="stylesheet" href="style.css" />
+  <script type="importmap">
+  {
+    "imports": {
+      "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2.105.4",
+      "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+    }
+  }
+  </script>
+</head>
+<body>
+  <!-- Three.js renderer -->
+  <canvas id="three-canvas"></canvas>
+  <!-- 2D HUD overlay -->
+  <canvas id="hud-canvas"></canvas>
+
+  <div id="global-toast-container" class="global-toast-container"></div>
+
+  <div id="profile-widget" class="profile-widget">
+    <button id="btn-profile-open" class="profile-chip" type="button">
+      <span id="profile-dot" class="profile-dot"></span>
+      <span id="profile-chip-name">Guest</span>
+      <b id="profile-chip-coins">0</b>
+    </button>
+    <div id="profile-panel" class="profile-panel hidden">
+      <div class="profile-panel-head">
+        <strong>MY GARAGE</strong>
+        <button id="btn-profile-close" class="btn-icon" aria-label="닫기">×</button>
+      </div>
+      <div id="profile-auth-box" class="profile-auth-box">
+        <button class="btn-secondary btn-small" id="btn-auth-logout">로그아웃</button>
+        <span id="auth-status">로그인 정보로 코인과 차량을 저장합니다.</span>
+      </div>
+      <label class="profile-field">
+        <span>닉네임</span>
+        <input id="profile-nickname" maxlength="24" autocomplete="nickname" />
+      </label>
+      <label class="profile-field">
+        <span>프로필 테마</span>
+        <input id="profile-theme" type="color" value="#2ec4b6" />
+      </label>
+      <div class="profile-wallet">
+        <span>COINS</span>
+        <b id="profile-coins">0</b>
+      </div>
+      <button class="btn-primary btn-small" id="btn-profile-save">프로필 저장</button>
+      <div class="profile-note" id="profile-note">게스트는 기본 차량만 사용할 수 있습니다.</div>
+    </div>
+  </div>
+
+  <!-- UI screens -->
+  <div id="screen-auth" class="screen active">
+    <div class="auth-card">
+      <h1 class="auth-title">RACING SANDBOX</h1>
+      <p class="auth-subtitle" id="auth-mode-subtitle">아이디와 비밀번호로 로그인</p>
+      <form id="auth-form" class="auth-form" autocomplete="on">
+        <label class="auth-field">
+          <span>아이디</span>
+          <input id="auth-id" type="text" autocomplete="username" maxlength="20" placeholder="3~20자 영문/숫자" required />
+        </label>
+        <label class="auth-field">
+          <span>비밀번호</span>
+          <input id="auth-password" type="password" autocomplete="current-password" minlength="4" placeholder="4자 이상" required />
+        </label>
+        <label class="auth-field auth-field-confirm hidden">
+          <span>비밀번호 확인</span>
+          <input id="auth-password-confirm" type="password" autocomplete="new-password" minlength="4" placeholder="동일하게 입력" />
+        </label>
+        <div class="auth-error" id="auth-error"></div>
+        <button class="btn-primary auth-submit" id="btn-auth-submit" type="submit">로그인</button>
+      </form>
+      <div class="auth-switch">
+        <span id="auth-switch-label">계정이 없으신가요?</span>
+        <button class="btn-link" id="btn-auth-toggle" type="button">회원가입</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="screen-carselect" class="screen">
+    <div class="screen-header">
+      <h1>RACING SANDBOX</h1>
+      <p class="subtitle">차량을 선택하세요</p>
+    </div>
+    <div class="category-tabs" id="cat-tabs"></div>
+    <div class="home-layout">
+      <div class="car-grid" id="car-grid"></div>
+      <aside class="home-leaderboard">
+        <div class="home-board-head">
+          <div>
+            <strong>LIVE RANKING</strong>
+            <span id="home-leaderboard-status">서버 연결 중...</span>
+          </div>
+          <select id="home-leaderboard-track" aria-label="메인 랭킹 맵 선택"></select>
+        </div>
+        <ol class="global-leaderboard-list compact" id="home-leaderboard-list"></ol>
+        <button class="btn-secondary btn-small" id="btn-open-leaderboard">전체 보기</button>
+      </aside>
+    </div>
+    <div class="screen-footer">
+      <div class="car-desc" id="car-desc"></div>
+      <button class="btn-primary" id="btn-to-track">트랙 선택 →</button>
+    </div>
+    <div class="menu-credits">Created by Lee Chaeho · Test Play: Son Taeyoung, Jeong Uigyeom, Lee Ruwon</div>
+  </div>
+
+  <div id="screen-trackselect" class="screen">
+    <div class="screen-header">
+      <h1>트랙 선택</h1>
+      <p class="subtitle">서킷을 선택하세요 · <span id="track-mode-label">온라인 랭킹</span></p>
+    </div>
+    <label class="ghost-option hidden" id="ghost-option-box">
+      <input id="track-ghost-toggle" type="checkbox" checked />
+      <span>내 최고 기록 유령 켜기</span>
+    </label>
+    <div class="track-grid" id="track-grid"></div>
+    <div class="screen-footer">
+      <button class="btn-secondary" id="btn-back-car">← 모드 선택</button>
+      <button class="btn-primary" id="btn-start-game">게임 시작 →</button>
+    </div>
+  </div>
+
+  <div id="screen-skinselect" class="screen">
+    <div class="screen-header">
+      <h1>스킨 선택</h1>
+      <p class="subtitle">이벤트 스킨을 장착하세요</p>
+    </div>
+    <div class="skin-grid" id="skin-grid"></div>
+    <div class="screen-footer">
+      <button class="btn-secondary" id="btn-back-skin-car">← 차량 선택</button>
+      <div class="car-desc" id="skin-desc"></div>
+      <button class="btn-primary" id="btn-to-mode">모드 선택 →</button>
+    </div>
+  </div>
+
+  <div id="screen-modeselect" class="screen">
+    <div class="screen-header">
+      <h1>모드 선택</h1>
+      <p class="subtitle">온라인 랭킹 또는 오프라인 유령 주행</p>
+    </div>
+    <div class="mode-grid">
+      <button class="mode-card" id="btn-mode-online" type="button">
+        <b>ONLINE</b>
+        <span>서버 방에 접속해 친구방 또는 빠른 매칭으로 같이 달립니다.</span>
+      </button>
+      <button class="mode-card" id="btn-mode-offline" type="button">
+        <b>OFFLINE</b>
+        <span>서버 업로드 없이 연습합니다. 맵 선택 후 내 최고 기록 유령을 켤 수 있습니다.</span>
+      </button>
+    </div>
+    <div class="screen-footer">
+      <button class="btn-secondary" id="btn-back-mode-skin">← 스킨 선택</button>
+      <div></div>
+    </div>
+  </div>
+
+  <div id="screen-lobby" class="screen">
+    <div class="screen-header">
+      <h1>온라인 멀티플레이</h1>
+      <p class="subtitle" id="lobby-subtitle">친구와 함께 달리거나 매칭으로 새 라이벌을 만나세요</p>
+    </div>
+    <div class="lobby-layout">
+      <aside class="lobby-mode-pane">
+        <div class="lobby-mode-tabs">
+          <button class="lobby-tab active" id="lobby-tab-quick" type="button">빠른 매칭</button>
+          <button class="lobby-tab" id="lobby-tab-private" type="button">친구방</button>
+        </div>
+
+        <div id="lobby-pane-quick" class="lobby-pane">
+          <p class="lobby-pane-hint">트랙을 골라 매칭 큐에 입장하세요. 2명 이상 모이면 자동 출발합니다.</p>
+          <label class="lobby-field">
+            <span>매칭 트랙</span>
+            <select id="lobby-quick-track"></select>
+          </label>
+          <div class="lobby-queue-status" id="lobby-queue-status">대기 인원: -</div>
+          <button class="btn-primary" id="btn-lobby-quick" type="button">매칭 시작</button>
+          <button class="btn-secondary hidden" id="btn-lobby-quick-cancel" type="button">매칭 취소</button>
+        </div>
+
+        <div id="lobby-pane-private" class="lobby-pane hidden">
+          <p class="lobby-pane-hint">6자리 코드를 친구에게 공유하거나 받은 코드를 입력하세요.</p>
+          <label class="lobby-field">
+            <span>방 만들기 - 트랙</span>
+            <select id="lobby-private-track"></select>
+          </label>
+          <button class="btn-primary" id="btn-lobby-create" type="button">새 방 만들기</button>
+          <div class="lobby-divider"><span>또는</span></div>
+          <label class="lobby-field">
+            <span>코드 입력</span>
+            <input id="lobby-private-code" type="text" maxlength="8" placeholder="예: K9PR2X" autocomplete="off" />
+          </label>
+          <button class="btn-secondary" id="btn-lobby-join" type="button">방 입장</button>
+        </div>
+
+        <button class="btn-link" id="btn-lobby-back" type="button">← 모드 선택으로</button>
+        <div class="lobby-conn-state" id="lobby-conn-state">서버 연결 중...</div>
+      </aside>
+
+      <section class="lobby-room-pane hidden" id="lobby-room-pane">
+        <header class="lobby-room-head">
+          <div>
+            <span class="lobby-room-label" id="lobby-room-label">방 코드</span>
+            <h2 id="lobby-room-code">------</h2>
+          </div>
+          <div class="lobby-room-meta">
+            <span id="lobby-room-track">트랙</span>
+            <span id="lobby-room-laps">3 LAP</span>
+          </div>
+        </header>
+        <div class="lobby-room-controls" id="lobby-room-controls">
+          <label class="lobby-field">
+            <span>트랙 변경</span>
+            <select id="lobby-room-track-select"></select>
+          </label>
+          <label class="lobby-field">
+            <span>랩 수</span>
+            <select id="lobby-room-laps-select">
+              <option value="1">1 LAP</option>
+              <option value="2">2 LAP</option>
+              <option value="3" selected>3 LAP</option>
+              <option value="4">4 LAP</option>
+              <option value="5">5 LAP</option>
+            </select>
+          </label>
+        </div>
+        <ul class="lobby-player-list" id="lobby-player-list"></ul>
+        <div class="lobby-room-actions">
+          <button class="btn-secondary" id="btn-lobby-ready" type="button">준비 완료</button>
+          <button class="btn-primary" id="btn-lobby-start" type="button">레이스 시작</button>
+          <button class="btn-link" id="btn-lobby-leave" type="button">방 나가기</button>
+        </div>
+      </section>
+    </div>
+    <div id="lobby-toast" class="lobby-toast hidden"></div>
+  </div>
+
+  <div id="screen-mpresults" class="screen">
+    <div class="mpresults-box">
+      <h2 id="mpresults-title">레이스 종료</h2>
+      <ol class="mpresults-list" id="mpresults-list"></ol>
+      <div class="mpresults-actions">
+        <button class="btn-primary" id="btn-mp-rematch">로비로 돌아가기</button>
+        <button class="btn-secondary" id="btn-mp-to-menu">메뉴로</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="screen-results" class="screen">
+    <div class="results-box">
+      <div class="results-title" id="res-title">랩 완주</div>
+      <div class="results-time" id="res-time">--:--.---</div>
+      <div class="results-sectors" id="res-sectors"></div>
+      <div class="leaderboard-panel" id="leaderboard-panel">
+        <div class="leaderboard-head">
+          <div>
+            <div class="leaderboard-title">온라인 랭킹</div>
+            <div class="leaderboard-subtitle" id="leaderboard-subtitle">--</div>
+          </div>
+        </div>
+        <ol class="leaderboard-list" id="leaderboard-list"></ol>
+        <div class="leaderboard-status" id="leaderboard-status">서버 연결 중...</div>
+      </div>
+      <div class="results-actions">
+        <button class="btn-primary" id="btn-retry">재도전</button>
+        <button class="btn-secondary" id="btn-to-menu">메뉴로</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Controls hint overlay (game only) -->
+  <div id="controls-hint" style="display:none;">
+    <span>W/S: 가속·브레이크</span><span>A/D: 조향</span>
+    <span>SPACE: 드리프트</span><span>ENTER: 더블 U턴</span><span>SHIFT: 부스트</span>
+    <span>Q/E: 기어 ↑↓</span><span>T: 자동/수동</span>
+    <span>R: 리셋</span><span>C: 체이스/보넷/탑뷰</span><span>ESC: 메뉴</span>
+  </div>
+
+  <!-- Help button (always available, opens controls modal) -->
+  <button id="btn-help" title="조작법">?</button>
+  <div id="leaderboard-overlay" class="hidden">
+    <div class="leaderboard-modal">
+      <div class="modal-head">
+        <div>
+          <h2>토탈 랭킹</h2>
+          <p id="global-leaderboard-status">서버 연결 중...</p>
+        </div>
+        <select id="leaderboard-track-filter" aria-label="랭킹 맵 선택"></select>
+        <button class="btn-icon" id="btn-leaderboard-close" aria-label="닫기">×</button>
+      </div>
+      <ol class="global-leaderboard-list" id="global-leaderboard-list"></ol>
+      <button class="btn-secondary" id="btn-leaderboard-refresh">새로고침</button>
+    </div>
+  </div>
+  <div id="help-overlay" class="hidden">
+    <div class="help-box">
+      <h2>조작법 (Controls)</h2>
+      <table class="help-table">
+        <tr><td><kbd>W</kbd> / <kbd>S</kbd></td><td>가속 / 브레이크 · 후진</td></tr>
+        <tr><td><kbd>A</kbd> / <kbd>D</kbd></td><td>좌 / 우 조향</td></tr>
+        <tr><td><kbd>SPACE</kbd></td><td>핸드브레이크 — 길게 잡으면 일반 드리프트</td></tr>
+        <tr><td><kbd>ENTER</kbd></td><td>더블 드리프트 — 코너에서 누르면 약 90° 임펄스로 U턴급 회전</td></tr>
+        <tr><td><kbd>SHIFT</kbd></td><td>부스트 발동 / DRX 직선 구간에서는 더블클릭으로 슈퍼부스트</td></tr>
+        <tr><td><kbd>Q</kbd> / <kbd>E</kbd></td><td>기어 업 / 다운 (8단 수동 모드 자동 전환)</td></tr>
+        <tr><td><kbd>T</kbd></td><td>자동 ↔ 수동 변속 토글</td></tr>
+        <tr><td><kbd>R</kbd></td><td>차량 리셋 (스타트 라인으로)</td></tr>
+        <tr><td><kbd>C</kbd></td><td>카메라 시점 전환 (체이스 / 보넷 / 탑뷰)</td></tr>
+        <tr><td><kbd>ESC</kbd></td><td>메뉴로 나가기</td></tr>
+      </table>
+      <h3>기술 시연</h3>
+      <div class="tech-grid">
+        <div class="tech-card">
+          <div class="tech-title"><kbd>SPACE</kbd> 기본 드리프트</div>
+          <svg class="tech-svg" viewBox="0 0 240 90">
+            <path d="M 10,68 C 70,68 100,62 130,40 C 170,12 210,16 235,16" stroke="#3a4452" stroke-width="14" fill="none" stroke-linecap="round"/>
+            <path d="M 10,68 C 70,68 100,62 130,40 C 170,12 210,16 235,16" stroke="#5b6573" stroke-width="1" fill="none" stroke-dasharray="3 5"/>
+            <g>
+              <rect x="-7" y="-4" width="14" height="8" fill="#2ec4b6" rx="1.5"/>
+              <rect x="3" y="-3" width="2" height="6" fill="#0d1117"/>
+              <animateMotion dur="2.4s" repeatCount="indefinite" rotate="auto">
+                <mpath href="#tech-path-single"/>
+              </animateMotion>
+            </g>
+            <path id="tech-path-single" d="M 10,68 C 70,68 100,62 130,40 C 170,12 210,16 235,16" fill="none" stroke="none"/>
+          </svg>
+          <p class="tech-desc">코너 진입에서 한 번 살짝 누르면 자연스러운 슬립. 부스트 미터 충전용.</p>
+        </div>
+        <div class="tech-card">
+          <div class="tech-title"><kbd>SPACE</kbd> + <kbd>ENTER</kbd> 더블 드리프트</div>
+          <svg class="tech-svg" viewBox="0 0 240 90">
+            <path d="M 30,72 C 110,72 195,72 195,42 C 195,14 110,14 30,14" stroke="#3a4452" stroke-width="14" fill="none" stroke-linecap="round"/>
+            <path d="M 30,72 C 110,72 195,72 195,42 C 195,14 110,14 30,14" stroke="#5b6573" stroke-width="1" fill="none" stroke-dasharray="3 5"/>
+            <g>
+              <rect x="-7" y="-4" width="14" height="8" fill="#ffd166" rx="1.5"/>
+              <rect x="3" y="-3" width="2" height="6" fill="#0d1117"/>
+              <animateMotion dur="2.4s" repeatCount="indefinite" rotate="auto">
+                <mpath href="#tech-path-double"/>
+              </animateMotion>
+            </g>
+            <path id="tech-path-double" d="M 30,72 C 110,72 195,72 195,42 C 195,14 110,14 30,14" fill="none" stroke="none"/>
+          </svg>
+          <p class="tech-desc">U턴 / 헤어핀에서 사용. 핸드브레이크 잡은 상태에서 엔터를 누르면 약 90° 임펄스로 차체가 휙 돌아감. 고속에서도 동작.</p>
+        </div>
+        <div class="tech-card">
+          <div class="tech-title"><kbd>SHIFT</kbd> 부스트</div>
+          <svg class="tech-svg" viewBox="0 0 240 90">
+            <path d="M 10,45 L 230,45" stroke="#3a4452" stroke-width="14" fill="none" stroke-linecap="round"/>
+            <g>
+              <rect x="-7" y="-4" width="14" height="8" fill="#c77dff" rx="1.5"/>
+              <rect x="3" y="-3" width="2" height="6" fill="#0d1117"/>
+              <line x1="-22" y1="-2" x2="-9" y2="-2" stroke="#c77dff" stroke-width="1.2" opacity="0.6"/>
+              <line x1="-22" y1="2" x2="-9" y2="2" stroke="#c77dff" stroke-width="1.2" opacity="0.6"/>
+              <animateMotion dur="1.6s" repeatCount="indefinite" rotate="auto">
+                <mpath href="#tech-path-boost"/>
+              </animateMotion>
+            </g>
+            <path id="tech-path-boost" d="M 10,45 L 230,45" fill="none" stroke="none"/>
+          </svg>
+          <p class="tech-desc">미터가 30 이상일 때 한 번 누르면 1.5초간 최고속·가속 폭증.</p>
+        </div>
+        <div class="tech-card">
+          <div class="tech-title"><kbd>SHIFT</kbd>×2 슈퍼부스트 (DRX)</div>
+          <svg class="tech-svg" viewBox="0 0 240 90">
+            <path d="M 10,45 L 230,45" stroke="#3a4452" stroke-width="14" fill="none" stroke-linecap="round"/>
+            <g>
+              <rect x="-8" y="-4.5" width="16" height="9" fill="#38bdf8" rx="1.5"/>
+              <rect x="4" y="-3" width="2" height="6" fill="#0d1117"/>
+              <line x1="-32" y1="-3" x2="-10" y2="-3" stroke="#38bdf8" stroke-width="1.4" opacity="0.7"/>
+              <line x1="-32" y1="0"  x2="-10" y2="0"  stroke="#38bdf8" stroke-width="1.4" opacity="0.9"/>
+              <line x1="-32" y1="3"  x2="-10" y2="3"  stroke="#38bdf8" stroke-width="1.4" opacity="0.7"/>
+              <animateMotion dur="1.0s" repeatCount="indefinite" rotate="auto">
+                <mpath href="#tech-path-drx"/>
+              </animateMotion>
+            </g>
+            <path id="tech-path-drx" d="M 10,45 L 230,45" fill="none" stroke="none"/>
+          </svg>
+          <p class="tech-desc">직선 구간에서 DRX 게이지가 살아있을 때 SHIFT를 두 번 톡톡. 2.6초간 압도적 가속.</p>
+        </div>
+      </div>
+      <h3>기능 안내</h3>
+      <ul class="help-list">
+        <li><b>드리프트</b> — 핸드브레이크 + 코너에서 슬립하면 BOOST 미터가 차오름</li>
+        <li><b>직선 드리프트</b> — 조향 없이 SPACE를 누른 채 직진하면 핸드브레이크 저항으로 강하게 감속</li>
+        <li><b>더블 드리프트</b> — 스페이스를 잡은 채 엔터키를 누르면 약 90° 임펄스가 발동해 U턴 / 헤어핀에서 한방 정렬 (스페이스 누르고 있어도 고속에서 안정적으로 발동)</li>
+        <li><b>부스트</b> — 30 이상 차면 SHIFT 한 번에 1.5초간 최고속+가속 ↑</li>
+        <li><b>기어</b> — 자동(AUTO): 알아서 변속. 수동(MANUAL): 레브 리미터 + 다운시프트 보호</li>
+        <li><b>벽 충돌</b> — 4개 바퀴 모두 트랙 안쪽으로 유지. 빠른 충돌은 화면 흔들림 + 스파크</li>
+      </ul>
+      <button class="btn-primary" id="btn-help-close">닫기</button>
+    </div>
+  </div>
+
+  <div id="starter-roulette-overlay" class="hidden">
+    <div class="roulette-box">
+      <h2>BACCARAT JACKPOT</h2>
+      <p>새 계정 보너스 차량</p>
+      <div class="roulette-reels">
+        <div class="roulette-reel" id="roulette-reel-1">?</div>
+        <div class="roulette-reel" id="roulette-reel-2">?</div>
+        <div class="roulette-reel" id="roulette-reel-3">?</div>
+      </div>
+      <div id="roulette-result" class="roulette-result">세 장이 맞으면 차량을 획득합니다.</div>
+      <button class="btn-primary" id="btn-roulette-spin">돌리기</button>
+    </div>
+  </div>
+
+  <script type="module" src="main.js"></script>
+</body>
+</html>
